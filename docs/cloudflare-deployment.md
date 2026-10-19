@@ -16,7 +16,9 @@ The Database ID is configuration, not a password. No API tokens belong in the re
 
 ## 2. Initialize its two tables once
 
-In the new database's **Console**, run the SQL from [`drizzle/0000_swift_scrambler.sql`](../drizzle/0000_swift_scrambler.sql). It creates `reviews` and `vendors`. Run it only on the new, empty database.
+In the new database's **Console**, use [`cloudflare/schema.sql`](../cloudflare/schema.sql). Paste and execute the first `CREATE TABLE` statement, then paste and execute the second statement separately. These queries use `IF NOT EXISTS`, so you can retry if the first table was already created. Run `/tables` afterward and confirm both `reviews` and `vendors` appear.
+
+Do not paste the Drizzle migration's `--> statement-breakpoint` marker into this single-line console. It is a SQL comment; if newlines are removed during pasting, it can hide the following statement and produce “SQL code did not contain a statement.” The Console schema file contains no migration comments.
 
 Alternatively, if you have cloned the repository locally, initialize the fresh database with tracked migrations:
 
