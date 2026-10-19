@@ -2,11 +2,11 @@
 
 A working PS-2 vendor onboarding process: receive a form and supporting documents, compare the evidence, check the approved vendor registry, and record an explained decision.
 
-This version supports India and explicitly labelled, text-based documents. It uses a PDF/text/JSON parser and deterministic rules; it does not call an AI model, perform OCR, or verify records with a government or bank. Hosted access is private until deliberately changed.
+This version supports India and explicitly labelled, text-based documents. It uses a PDF/text/JSON parser and deterministic rules; it does not call an AI model, perform OCR, or verify records with a government or bank. The public demo uses a shared workspace with fictional sample data.
 
 **Try three manual submissions:** [copyable vendor details and matching upload documents](docs/manual-submissions.md). The examples demonstrate approval, missing bank proof, and an account-holder mismatch. For one-click preparation and all 26 cases, use the app's **Demo workspace**.
 
-**Live demo:** [Vendor Review Desk](https://vendor-review-desk.kuku-technol-9786.chatgpt.site/) (access-controlled; the owner must grant reviewer access).
+**Live demo:** [Vendor Review Desk](https://vendor-review-desk.harshmahar786.workers.dev/) (public recruiter demo; no sign-in required).
 
 **Host from your own GitHub repo:** [Cloudflare deployment guide](docs/cloudflare-deployment.md). The repository includes an independent Workers + D1 target with a public recruiter-demo URL after you connect your account and database.
 

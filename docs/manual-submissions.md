@@ -1,6 +1,6 @@
 # Three vendor submissions for the live demo
 
-Open the app, click **New submission**, and enter one of the examples below. These are fictional companies, contact addresses, tax identifiers, and banking details. No email is sent.
+Open [the public demo](https://vendor-review-desk.harshmahar786.workers.dev/), click **New submission**, and enter one of the examples below. These are fictional companies, contact addresses, tax identifiers, and banking details. No email is sent.
 
 The JSON form files in [`examples/manual-submissions/`](../examples/manual-submissions/) are copy references for the six form fields. They are not registration or bank proof; upload the supporting documents linked below in their respective upload areas.
 

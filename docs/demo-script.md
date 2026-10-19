@@ -56,7 +56,7 @@ Open history or reload a saved run.
 
 ## Before submitting
 
-- Confirm the final URL permits the hiring coordinator to access and run the app. The initial Sites deployment is private; a private owner-only URL alone is not a sufficient reviewer handoff.
+- Use https://vendor-review-desk.harshmahar786.workers.dev/ and confirm it opens in a private browser window so the hiring coordinator can access and run it.
 - Confirm the video is less than five minutes and its sharing permissions permit the coordinator to watch it.
 - Show a happy path and at least one edge case running live in the recording.
 - Keep the four scenarios and the explanation of policy assumptions ready for the interview.
