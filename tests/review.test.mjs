@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { normalizeName, normalizeTax, gstCheckDigit, validTax, maskAccount, intakeChecks, documentChecks, registrationChecks, bankingChecks, registryCheck, decision, explain, accountFingerprint } from "../lib/review.ts";
+import {policyChecks} from "../lib/vendor-policy.ts";
 import { parseFields, extractDocument } from "../lib/extract.ts";
 
 const input = { legalName:"Northstar Studio Private Limited", email:"finance@northstar.example", country:"IN", taxId:"29AAACN1234A1Z" + gstCheckDigit("29AAACN1234A1Z"), account:"102030405678", bankCode:"HDFC0001234" };
@@ -9,9 +10,9 @@ const docs = [
   {kind:"tax", fileName:"registration.txt", format:"TXT", pages:0, fields:{legalName:input.legalName,taxId:input.taxId}},
   {kind:"bank", fileName:"bank.txt", format:"TXT", pages:0, fields:{legalName:"Northstar Studio Pvt. Ltd.",account:input.account,bankCode:input.bankCode}},
 ];
-const checks = (s=input, e=docs, existing=null, key="key") => [...intakeChecks(s),...documentChecks(e),...registrationChecks(s,e),...bankingChecks(s,e),registryCheck(s,key,existing)];
+const checks = (s=input, e=docs, existing=null, key="key") => [...intakeChecks(s),...documentChecks(e),...registrationChecks(s,e),...bankingChecks(s,e),...policyChecks(s,e),registryCheck(s,key,existing)];
 
-test("consistent documents produce an approval", () => { assert.equal(decision(checks()),"approved"); assert.equal(checks().length,12); });
+test("consistent documents produce an approval", () => { assert.equal(decision(checks()),"approved"); assert.equal(checks().length,15); });
 test("name normalization handles punctuation and legal abbreviations", () => { assert.equal(normalizeName("Northstar Studio Pvt. Ltd."),normalizeName(input.legalName)); assert.notEqual(normalizeName("Northstar Studio Holdings Limited"),normalizeName(input.legalName)); });
 test("GSTIN validation rejects altered checksum and malformed data", () => { assert.equal(validTax(input.taxId),true); assert.equal(validTax(input.taxId.slice(0,14) + (input.taxId[14] === "0" ? "1" : "0")),false); assert.equal(validTax("99"+input.taxId.slice(2)),false); assert.equal(normalizeTax(" ab cd "),"ABCD"); });
 test("GSTIN checksum agrees with a fixed known example", () => { assert.equal(validTax("27AAPFU0939F1ZV"),true); assert.equal(gstCheckDigit("27AAPFU0939F1Z"),"V"); });

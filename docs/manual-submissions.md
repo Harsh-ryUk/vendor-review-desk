@@ -21,7 +21,7 @@ Upload:
 - Bank account proof: [`northstar-bank.pdf`](../public/samples/northstar-bank.pdf)
 - Form reference: [`northstar.json`](../examples/manual-submissions/northstar.json)
 
-Click **Run vendor review**. On a registry without this GSTIN, expect **Approved**, all 12 checks passed, and a saved vendor record. The bank proof uses “Pvt. Ltd.”; the app correctly normalizes that legal-name variation.
+Leave **Service category** as **General goods and services**. Click **Run vendor review**. On a registry without this GSTIN, expect **Approved**, all 15 checks passed, and a saved vendor record. The bank proof uses “Pvt. Ltd.”; the app correctly normalizes that legal-name variation.
 
 If this exact vendor is already approved, expect **Rejected** as a duplicate. This is intentional. For a fresh approval on every rehearsal, use **Demo workspace → Everything matches**, which generates a fresh fictional identifier. Do not change only the form's GSTIN: the registration document must match it too.
 

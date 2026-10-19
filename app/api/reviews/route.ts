@@ -1,4 +1,5 @@
 import { SCENARIOS } from "../../../lib/scenarios";
+import { policyChecks } from "../../../lib/vendor-policy";
 import { env } from "cloudflare:workers";
 import { extractDocument } from "../../../lib/extract";
 import { STAGES, POLICY_VERSION, accountFingerprint, maskAccount, normalizeTax, intakeChecks, documentChecks, registrationChecks, bankingChecks, registryCheck, decision, explain, type Review, type Submission, type Check, type RegistryVendor, type Stage } from "../../../lib/review";
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
   let form: FormData;
   try { form = await request.formData(); } catch { return json({ error: "Expected a multipart form submission." }, 400); }
   const input = Object.fromEntries(["legalName", "email", "country", "taxId", "account", "bankCode"].map(key => [key, String(form.get(key) || "").trim()])) as Submission;
+  input.serviceCategory = String(form.get('serviceCategory') || 'general').trim();
   if (Object.values(input).some(x => x.length > 200)) return json({ error: "Form fields must be 200 characters or fewer." }, 400);
   input.taxId = normalizeTax(input.taxId);
   input.bankCode = input.bankCode.toUpperCase();
@@ -66,7 +68,8 @@ export async function POST(request: Request) {
         const accountKey = await accountFingerprint(input.account);
         const lookup = async () => db.prepare("SELECT tax_id AS taxId, legal_name AS legalName, account_key AS accountKey, bank_code AS bankCode, run_id AS runId FROM vendors WHERE tax_id = ?").bind(input.taxId).first<RegistryVendor>();
         let existing: RegistryVendor | null = null;
-        await stage(4, "Looking for duplicate registrations or changes to approved banking details", async () => {
+        await stage(4, "Checking policy references, service category, and approved vendor registry", async () => {
+          checks.push(...policyChecks(input, evidence));
           existing = await lookup();
           checks.push(registryCheck(input, accountKey, existing));
         });

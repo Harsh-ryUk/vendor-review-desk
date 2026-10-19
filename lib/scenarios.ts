@@ -1,4 +1,5 @@
 import { gstCheckDigit, type Status, type Submission } from './review.ts';
+import { POLICY_REFERENCES } from './vendor-policy.ts';
 
 export type Scenario = { id: string; name: string; company: string; category: string; expected: Status; description: string; check: string; baseline?: string };
 export const SCENARIOS: Scenario[] = [
@@ -32,6 +33,10 @@ export const SCENARIOS: Scenario[] = [
   {id:'duplicate-account-format',name:'Repeat with formatted account number',company:'Northstar Studio',category:'Registry',expected:'rejected',check:'duplicate',baseline:'clean',description:'Spaces and hyphens change how the account is written, not which account it is. Reject the repeated onboarding.'},
   {id:'duplicate-json',name:'Same vendor, new document format',company:'Northstar Studio',category:'Registry',expected:'rejected',check:'duplicate',baseline:'clean',description:'Fresh JSON documents contain the same approved identity and banking details. A new file format does not make a new vendor.'},
   {id:'duplicate-oakline',name:'Second approved vendor resubmits',company:'Oakline Services',category:'Registry',expected:'rejected',check:'duplicate',baseline:'normalized',description:'Oakline repeats its approved registration and bank details. Link the rejection to Oakline’s own original approval.'},
+  {id:'blocked-vendor',name:'Vendor on internal restriction list',company:'Ironbridge Demo',category:'Policy restrictions',expected:'rejected',check:'vendor-restriction',description:'Matching legal name and GSTIN identify a do-not-onboard record in the fictional internal reference dataset. Clean documents cannot lift the restriction.'},
+  {id:'revoked-registration',name:'Revoked registration reference',company:'Westport Demo',category:'Policy restrictions',expected:'rejected',check:'registration-standing',description:'The uploaded certificate matches, but the fictional registration reference records a revoked status. The result cites DEMO-REG-002; no government lookup is claimed.'},
+  {id:'prohibited-category',name:'Excluded service category',company:'Fairview Demo',category:'Policy restrictions',expected:'rejected',check:'service-category',description:'Consistent documents accompany a Gambling services declaration. The configured demo purchasing policy excludes that category.'},
+  {id:'blocked-missing-bank',name:'Restricted vendor with missing bank proof',company:'Ironbridge Demo',category:'Policy restrictions',expected:'rejected',check:'vendor-restriction',description:'Registration evidence confirms the restricted identity. Missing bank proof stays visible, but cannot remove the established procurement restriction.'},
 ];
 export const CATEGORIES = ['All cases', 'Rejected', ...new Set(SCENARIOS.map(s => s.category))];
 export type DemoDocument = {name: string; content: string; type: string};
@@ -68,6 +73,11 @@ export function buildScenario(id: string, suiteId: string): DemoSubmission {
   const index = SCENARIOS.indexOf(original);
   const company = original.company;
   const input: Submission = {legalName:`${company} Sample ${suiteId.slice(0,6)} Private Limited`,email:`demo-${id}@vendor.example`,country:'IN',taxId:identifier(suiteId,index),account:'102030405678',bankCode:'HDFC0001234'};
+  if (id==='blocked-vendor'||id==='blocked-missing-bank'||id==='revoked-registration') {
+    const reference=POLICY_REFERENCES[id==='revoked-registration'?1:0];
+    input.legalName=reference.legalName;input.taxId=reference.taxId;
+  }
+  if (id==='prohibited-category') input.serviceCategory='gambling';
   if (id==='changed') input.account='908070605432';
   if (id==='invalid-tax') input.taxId=input.taxId.slice(0,14)+(input.taxId[14]==='0'?'1':'0');
   if (id==='invalid-banking') {input.account='12345';input.bankCode='HDFC123';}
@@ -91,7 +101,7 @@ export function buildScenario(id: string, suiteId: string): DemoSubmission {
   const lines = (fields:Record<string,string>,bank=false) => Object.entries(fields).map(([k,v])=>`${k==='legalName'&&bank?'Account holder':labels[k]}: ${v}`);
   let tax: DemoDocument|null = {name:`sample-${id}-registration.pdf`,type:'application/pdf',content:pdf(lines(taxFields),id==='page-limit'?11:1)};
   let bank: DemoDocument|null = {name:`sample-${id}-bank.pdf`,type:'application/pdf',content:pdf(lines(bankFields,true))};
-  if (id==='missing'||id==='missing-both'||id==='duplicate-incomplete') bank=null;
+  if (id==='missing'||id==='missing-both'||id==='duplicate-incomplete'||id==='blocked-missing-bank') bank=null;
   if (id==='missing-tax'||id==='missing-both') tax=null;
   if (id==='duplicate-json') {tax={name:'sample-repeat-registration.json',type:'application/json',content:JSON.stringify(taxFields)};bank={name:'sample-repeat-bank.json',type:'application/json',content:JSON.stringify(bankFields)};}
   if (id==='conflicting') bank={name:'sample-conflicting-bank.txt',type:'text/plain',content:[...lines(bankFields,true),'Account number: 777777775678'].join('\n')};

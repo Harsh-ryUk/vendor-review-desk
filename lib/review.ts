@@ -1,6 +1,6 @@
 export type Status = "approved" | "pending" | "rejected";
-export type Check = { id: string; label: string; state: "pass" | "review" | "fail"; detail: string; source: string; action?: string };
-export type Submission = { legalName: string; email: string; country: string; taxId: string; account: string; bankCode: string };
+export type Check = { id: string; label: string; state: "pass" | "review" | "fail"; detail: string; source: string; action?: string; terminal?: boolean };
+export type Submission = { legalName: string; email: string; country: string; taxId: string; account: string; bankCode: string; serviceCategory?: string };
 export type Evidence = {
   kind: "tax" | "bank"; fileName: string; format: string; pages: number; error?: string;
   fields: { legalName?: string; taxId?: string; account?: string; bankCode?: string; validUntil?: string };
@@ -13,7 +13,7 @@ export type Review = {
   summary: string; response: string; relatedRunId?: string; policyVersion: string;
   sample?: {scenarioId: string; label: string; suiteId: string};
 };
-export const POLICY_VERSION = "1.0";
+export const POLICY_VERSION = "1.1";
 export const STAGES = [
   { id: "intake", label: "Receive submission" },
   { id: "extract", label: "Read documents" },
@@ -55,7 +55,7 @@ export function intakeChecks(s: Submission): Check[] {
   return [
     make("fields", "Required details", !!required && s.legalName.trim().length >= 2 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email),
       required ? "Company, contact, registration, and banking fields received. Email syntax is checked; ownership is not verified." : "One or more required submission fields are missing.", "Submission form", "Provide a company name, valid contact email, country, tax ID, account number, and IFSC."),
-    make("country", "Supported country", s.country === "IN", s.country === "IN" ? "India policy selected." : `Country ${s.country || "not provided"} is outside the current policy.`, "Policy v1.0", "Request a manual review for a country outside India."),
+    make("country", "Supported country", s.country === "IN", s.country === "IN" ? "India policy selected." : `Country ${s.country || "not provided"} is outside the current policy.`, `Policy v${POLICY_VERSION}`, "Request a manual review for a country outside India."),
   ];
 }
 export function documentChecks(evidence: Evidence[], now = new Date()): Check[] {
@@ -103,17 +103,20 @@ export function registryCheck(s: Submission, accountKey: string, existing: Regis
   return make("bank-change", "Existing vendor details changed", false, `This GSTIN already belongs to “${existing.legalName}” (${existing.runId}). The submitted company or banking details differ. Existing banking details have not been changed.`, "Approved vendor registry", "Ask procurement to verify the proposed changes through a known vendor contact before updating the existing record.");
 }
 export function decision(checks: Check[]): Status {
+  // An established policy prohibition cannot be fixed by supplying missing bank proof.
+  if (checks.some(c => c.state === "fail" && c.terminal)) return "rejected";
   // Missing evidence takes precedence over duplicate rejection: do not reject an unreadable application as a proven duplicate.
   if (checks.some(c => c.state === "review")) return "pending";
   if (checks.some(c => c.state === "fail")) return "rejected";
   return "approved";
 }
 export function explain(s: Submission, checks: Check[], status: Status, id: string) {
-  const actions = [...new Set(checks.filter(c => c.state !== "pass").map(c => c.action).filter(Boolean))];
+  const terminalFailure = checks.some(c=>c.state==='fail' && c.terminal);
+  const actions = [...new Set(checks.filter(c => terminalFailure ? c.state==='fail' && c.terminal : c.state !== "pass").map(c => c.action).filter(Boolean))];
   const summary = status === "approved" ? "The supplied details and documents pass all configured checks."
-    : status === "rejected" ? "An approved onboarding record already exists for this vendor."
+    : status === "rejected" ? checks.filter(c=>c.state==='fail').map(c=>`${c.label}: ${c.detail}`).join(' ')
     : `${checks.filter(c => c.state === "review").length} check${checks.filter(c => c.state === "review").length === 1 ? " needs" : "s need"} attention before this vendor can be approved.`;
-  const response = `To: ${s.email}\nSubject: Vendor onboarding ${status} — ${s.legalName}\n\nHello ${s.legalName},\n\n${summary}\n\n${status === "approved" ? "Your submission is approved under our document consistency policy. Procurement may contact you for additional verification before payment." : `Please take the following action${actions.length === 1 ? "" : "s"}:\n${actions.map((a, i) => `${i + 1}. ${a}`).join("\n")}`}\n\nReference: ${id}\nProcurement team`;
+  const response = `To: ${s.email}\nSubject: Vendor onboarding ${status} — ${s.legalName}\n\nHello ${s.legalName},\n\n${summary}\n\n${status === "approved" ? "Your submission is approved under the configured document consistency and demo procurement policy. Procurement may contact you for additional verification before payment." : `Please take the following action${actions.length === 1 ? "" : "s"}:\n${actions.map((a, i) => `${i + 1}. ${a}`).join("\n")}`}\n\nReference: ${id}\nProcurement team`;
   return { summary, response };
 }
 export async function accountFingerprint(account: string): Promise<string> {

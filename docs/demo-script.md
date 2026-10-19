@@ -7,7 +7,7 @@ Aim for 4 minutes 40 seconds. Use a screen recorder and your own narration. No s
 1. Open the deployed app and confirm that your recording browser can access it.
 2. Load Everything matches for a fresh fictional company identifier. Keep the same tab open so changed-bank and duplicate cases can reuse this approved baseline. Do not reload between these dependent cases.
 3. Keep the clean Northstar result available so the changed-bank scenario has an approved baseline.
-4. Rehearse the clean path and Cedar conflict once. Verify extraction and history. The full 30-case suite is available for preparation; keep the recording focused on the core cases.
+4. Rehearse the clean path and Cedar conflict once. Verify extraction and history. The full 34-case suite is available for preparation; keep the recording focused on the core cases.
 5. Hide unrelated browser tabs and notifications. Use the app at a readable desktop width.
 
 ## 0:00–0:25 — Explain the user and problem
@@ -38,11 +38,13 @@ Show the expanded failed check and then the **Vendor response** tab.
 
 “The next step is specific: supply bank proof in the registered company name or evidence explaining the difference. The result is available immediately to the form submitter, with copy and download options. This version does not send email.”
 
-## 3:05–3:45 — Show change protection
+## 3:05–3:45 — Run an independent rejection
 
-If time permits, run Northstar’s changed-bank scenario after its clean approval. Show the related original run.
+Open Demo workspace → Policy restrictions. Load Vendor on internal restriction list and run it. Show the restriction check, reference ID, and vendor response.
 
-“A familiar tax ID does not make new bank details safe. This request is held for independent verification. The existing approved banking record is not overwritten. Loading Identical repeat submission reuses the approved baseline and produces a duplicate rejection.”
+“Even though the documents match, this identity is on a fictional internal do-not-onboard list. The restriction has a recorded reason and a procurement contact step. Supplying another bank document cannot lift it. This is a local reference dataset for the demo, not live government or sanctions screening.”
+
+Other prepared rejection cases show a revoked registration in the fictional reference dataset and a service category excluded by the demo purchasing policy. Changed-bank protection and duplicate rejection remain available for follow-up questions.
 
 ## 3:45–4:15 — Show persistence and explain decisions
 
@@ -59,5 +61,5 @@ Open history or reload a saved run.
 - Use https://vendor-review-desk.harshmahar786.workers.dev/ and confirm it opens in a private browser window so the hiring coordinator can access and run it.
 - Confirm the video is less than five minutes and its sharing permissions permit the coordinator to watch it.
 - Show a happy path and at least one edge case running live in the recording.
-- Keep the four scenarios and the explanation of policy assumptions ready for the interview.
+- Keep the approval, pending, restriction, and duplicate scenarios and the explanation of policy assumptions ready for the interview.
 - Send the live process link and the video link to the hiring coordinator. No submission message has been sent by this app or by Codex.

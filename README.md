@@ -4,7 +4,7 @@ A working PS-2 vendor onboarding process: receive a form and supporting document
 
 This version supports India and explicitly labelled, text-based documents. It uses a PDF/text/JSON parser and deterministic rules; it does not call an AI model, perform OCR, or verify records with a government or bank. The public demo uses a shared workspace with fictional sample data.
 
-**Try three manual submissions:** [copyable vendor details and matching upload documents](docs/manual-submissions.md). The examples demonstrate approval, missing bank proof, and an account-holder mismatch. For one-click preparation and all 30 cases, use the app's **Demo workspace**.
+**Try three manual submissions:** [copyable vendor details and matching upload documents](docs/manual-submissions.md). The examples demonstrate approval, missing bank proof, and an account-holder mismatch. For one-click preparation and all 34 cases, use the app's **Demo workspace**.
 
 **Live demo:** [Vendor Review Desk](https://vendor-review-desk.harshmahar786.workers.dev/) (public recruiter demo; no sign-in required).
 
@@ -29,7 +29,7 @@ Visit `http://127.0.0.1:5173/`. Open **Demo workspace**, load **Everything match
 
 | Input | Expected result | Evidence |
 | --- | --- | --- |
-| Northstar clean submission | Approved on a fresh registry | All 12 checks pass; vendor registry row is created |
+| Northstar clean submission | Approved on a fresh registry | All 15 checks pass; vendor registry row is created |
 | Willow without bank proof | Pending | The response asks for the missing bank document |
 | Cedar with a different account holder | Pending | Form and document names are shown side by side |
 | Northstar with changed banking | Pending after the clean approval | Linked to original approval; original banking is retained |
@@ -39,19 +39,27 @@ Run Everything matches before the bank-change or duplicate cases. Each load of a
 
 ## Expanded sample workspace
 
-The Demo workspace includes 30 runnable cases across core flows, registration, banking, documents, file handling, and registry behavior. Category filters keep the four core interview cases easy to find. Load a case to inspect its form and generated PDF/TXT/JSON evidence, then run it through the normal server endpoint.
+The Demo workspace includes 34 runnable cases across core flows, registration, banking, documents, file handling, registry behavior, and policy restrictions. Category filters keep the four core interview cases easy to find. Load a case to inspect its form and generated PDF/TXT/JSON evidence, then run it through the normal server endpoint.
 
-**Run all 30 samples** submits every case sequentially through the same six-stage live stream. It creates its own fresh baseline, records actual outcomes and expected-reason checks, and saves all results in history. You can stop after the current review; completed runs remain saved. Every generated record carries a Sample label, scenario name, and batch ID. A full successful batch produces two approvals, five duplicate rejections, and 23 pending reviews. No email is sent.
+**Run all 34 samples** submits every case sequentially through the same six-stage live stream. It creates its own fresh baseline, records actual outcomes and expected-reason checks, and saves all results in history. You can stop after the current review; completed runs remain saved. Every generated record carries a Sample label, scenario name, and batch ID. A full successful batch produces two approvals, nine rejections across duplicate and policy restrictions, and 23 pending reviews. No email is sent.
 
 Coverage includes missing one or both documents; invalid GSTIN checksum; mismatched certificate names and identifiers; legal-name normalization; full account comparison despite matching masked endings; IFSC conflict and invalid banking structure; expired and impossible dates; contradictory labels; unlabelled evidence; malformed and incorrectly typed JSON; incomplete certificates; unreadable and malformed PDFs; page limits; unsupported country; changed banking; and missing evidence taking precedence over duplicate rejection.
 
 Sample outcomes describe document consistency only. Fictional identifiers are not verified government registrations.
 
+## Independent rejection rules (policy v1.1)
+
+In addition to duplicates, the server checks an internal do-not-onboard reference, a revoked-registration reference, and a declared service category. `lib/vendor-policy.ts` contains the **fictional demo references**, including record IDs, names, GSTINs, reasons, and next steps. These are local fixtures, not external government or sanctions verification. The Review policy screen exposes these records.
+
+A restriction or revocation rejects only when country, valid GSTIN, form legal name, and readable registration evidence match the reference identity. A partial match needs manual review. Missing bank proof does not override an already confirmed prohibition; missing registration evidence prevents confirmation. A new category selector defaults to General goods and services for older clients; the demo purchasing policy excludes Gambling services. Unknown categories need review. Category is self-declared, not independently verified.
+
+The four additional samples cover a restricted vendor with complete evidence, a revoked-registration reference, an excluded service category, and a restricted vendor with missing bank proof. Rejected records never create an approved vendor. Vendor-facing responses state the actual reason and policy-owner action; they do not imply that uploading another bank document lifts a restriction.
+
 ## Understand the review
 
 The POST response streams newline-delimited JSON for six actual stages: intake, extraction, registration, banking, registry lookup, and saving. No stage is delayed to simulate work. Completed stage durations and the result are retained in D1.
 
-A missing or conflicting required field produces **pending**. Duplicate rejection is only used when the submitted evidence is otherwise consistent and the approved company, GSTIN, and banking fingerprint match. Any pending check takes precedence over duplicate rejection.
+Missing or conflicting evidence produces **pending** unless an established policy prohibition already prevents onboarding. Duplicate rejection is only used when the submitted evidence is otherwise consistent and the approved company, GSTIN, and banking fingerprint match. Any pending check takes precedence over duplicate rejection. Confirmed policy prohibitions take precedence over pending banking checks.
 
 The registry uses a unique GSTIN key. Review creation and a new approved vendor are committed in an atomic database batch. If another submission wins that race, the losing submission is re-evaluated against the new registry entry instead of creating another approval.
 
@@ -90,7 +98,7 @@ TEST_ORIGIN=http://127.0.0.1:5173 npm run test:scenarios
 npm run build
 ```
 
-The sample-suite integration script only accepts loopback origins. It verifies all 30 documented outcomes, saved sample labels, expected reasons, account masking, live streams, and baseline links. It also checks size/field limits, malformed requests, unsupported files, missing required details, and concurrent approvals.
+The sample-suite integration script only accepts loopback origins. It verifies all 34 documented outcomes, saved sample labels, expected reasons, account masking, live streams, and baseline links. It also checks size/field limits, malformed requests, unsupported files, missing required details, and concurrent approvals.
 
 The API integration script requires a running local preview and writes test data to its local database. It checks PDF submissions, missing evidence, banking conflict, changes against an approved record, duplicates, masking, saved stage events, malformed requests, and concurrent approval protection. It must not be pointed at a production system containing real vendor data.
 
@@ -98,7 +106,8 @@ The API integration script requires a running local preview and writes test data
 
 | File | Purpose |
 | --- | --- |
-| `lib/scenarios.ts` | 30 fictional input builders and small valid PDF fixtures |
+| `lib/vendor-policy.ts` | Fictional restriction/revocation references and service-category rules |
+| `lib/scenarios.ts` | 34 fictional input builders and small valid PDF fixtures |
 | `lib/run-review.ts` | Shared streamed review client for individual and batch submissions |
 | `app/page.tsx` | Overview, forms, demo workspace, live trail, evidence, and policy |
 | `app/api/reviews/route.ts` | Multipart intake, real progress stream, registry lookups, persistence |
