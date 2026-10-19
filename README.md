@@ -4,6 +4,10 @@ A working PS-2 vendor onboarding process: receive a form and supporting document
 
 This version supports India and explicitly labelled, text-based documents. It uses a PDF/text/JSON parser and deterministic rules; it does not call an AI model, perform OCR, or verify records with a government or bank. Hosted access is private until deliberately changed.
 
+**Try three manual submissions:** [copyable vendor details and matching upload documents](docs/manual-submissions.md). The examples demonstrate approval, missing bank proof, and an account-holder mismatch. For one-click preparation and all 26 cases, use the app's **Demo workspace**.
+
+**Live demo:** [Vendor Review Desk](https://vendor-review-desk.kuku-technol-9786.chatgpt.site/) (access-controlled; the owner must grant reviewer access).
+
 ## Run the app
 
 Requires Node.js 22.13+ and npm. No API key is needed.
