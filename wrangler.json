@@ -14,7 +14,7 @@
     {
       "binding": "DB",
       "database_name": "vendor-review-desk-db",
-      "database_id": "00000000-0000-4000-8000-000000000000",
+      "database_id": "8089161e-596c-4a87-b200-f291a13a87de",
       "migrations_dir": "./drizzle"
     }
   ],
