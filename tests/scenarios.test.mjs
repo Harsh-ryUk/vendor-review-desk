@@ -4,8 +4,8 @@ import {SCENARIOS,buildScenario,newSuiteId} from '../lib/scenarios.ts';
 import {extractDocument} from '../lib/extract.ts';
 import {intakeChecks,documentChecks,registrationChecks,bankingChecks,registryCheck,decision,accountFingerprint,normalizeTax} from '../lib/review.ts';
 
-test('all 26 sample submissions extract and produce their documented outcome and reason',async()=>{
-  assert.equal(SCENARIOS.length,26);
+test('all 30 sample submissions extract and produce their documented outcome and reason',async()=>{
+  assert.equal(SCENARIOS.length,30);
   const registry=new Map(),seed=newSuiteId();
   for(const scenario of SCENARIOS){
     const sample=buildScenario(scenario.id,seed), evidence=[];
@@ -22,6 +22,6 @@ test('all 26 sample submissions extract and produce their documented outcome and
 test('sample batches use fresh identifiers while retaining their own baseline relationships',()=>{
   const one=buildScenario('clean','batch-one'),two=buildScenario('clean','batch-two');
   assert.notEqual(one.input.taxId,two.input.taxId);
-  for(const id of ['changed','duplicate','duplicate-incomplete'])assert.equal(buildScenario(id,'batch-one').input.taxId,one.input.taxId);
+  for(const scenario of SCENARIOS.filter(s=>s.baseline))assert.equal(buildScenario(scenario.id,'batch-one').input.taxId,buildScenario(scenario.baseline,'batch-one').input.taxId,scenario.id);
   assert.throws(()=>buildScenario('unknown','batch-one'));
 });

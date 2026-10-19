@@ -55,8 +55,8 @@ Cloudflare Workers Builds handles installation and deploy authentication when co
 ## 4. Verify recruiter access
 
 1. Open the new URL in a private/incognito window. It should load without ChatGPT sign-in.
-2. Open **Demo workspace → Run all 26 samples** to create a fresh set of real fictional reviews in this database.
-3. Confirm **26 matched expectations**, then check the saved results in **Run history**.
+2. Open **Demo workspace → Run all 30 samples** to create a fresh set of real fictional reviews in this database.
+3. Confirm **30 matched expectations**, then check the saved results in **Run history**.
 4. Submit one of the [three manual vendor examples](manual-submissions.md).
 5. Share the public app URL, GitHub repository URL, and your demo-video link with the recruiter.
 

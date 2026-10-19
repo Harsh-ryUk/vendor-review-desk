@@ -7,7 +7,7 @@ Aim for 4 minutes 40 seconds. Use a screen recorder and your own narration. No s
 1. Open the deployed app and confirm that your recording browser can access it.
 2. Load Everything matches for a fresh fictional company identifier. Keep the same tab open so changed-bank and duplicate cases can reuse this approved baseline. Do not reload between these dependent cases.
 3. Keep the clean Northstar result available so the changed-bank scenario has an approved baseline.
-4. Rehearse the clean path and Cedar conflict once. Verify extraction and history. The full 26-case suite is available for preparation; keep the recording focused on the core cases.
+4. Rehearse the clean path and Cedar conflict once. Verify extraction and history. The full 30-case suite is available for preparation; keep the recording focused on the core cases.
 5. Hide unrelated browser tabs and notifications. Use the app at a readable desktop width.
 
 ## 0:00–0:25 — Explain the user and problem

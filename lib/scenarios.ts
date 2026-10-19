@@ -1,13 +1,13 @@
 import { gstCheckDigit, type Status, type Submission } from './review.ts';
 
-export type Scenario = { id: string; name: string; company: string; category: string; expected: Status; description: string; check: string; baseline?: boolean };
+export type Scenario = { id: string; name: string; company: string; category: string; expected: Status; description: string; check: string; baseline?: string };
 export const SCENARIOS: Scenario[] = [
   {id:'clean',name:'Everything matches',company:'Northstar Studio',category:'Core demo',expected:'approved',check:'registry',description:'Readable registration and bank PDFs agree with the submission.'},
   {id:'missing',name:'Missing bank proof',company:'Willow Works',category:'Core demo',expected:'pending',check:'doc-bank',description:'Registration is complete, but the required bank proof is absent.'},
   {id:'mismatch',name:'Different account holder',company:'Cedar Supply',category:'Core demo',expected:'pending',check:'bank-holder',description:'The bank account belongs to Cedar Logistics, not the submitted company.'},
-  {id:'changed',name:'Existing vendor, new account',company:'Northstar Studio',category:'Core demo',expected:'pending',check:'bank-change',baseline:true,description:'Banking differs from the approved baseline. Retain the original record.'},
-  {id:'duplicate',name:'Identical repeat submission',company:'Northstar Studio',category:'Registry',expected:'rejected',check:'duplicate',baseline:true,description:'Company, GSTIN, and bank details match an existing approved vendor.'},
-  {id:'duplicate-incomplete',name:'Duplicate with missing evidence',company:'Northstar Studio',category:'Registry',expected:'pending',check:'doc-bank',baseline:true,description:'Missing proof takes precedence over a duplicate match; request evidence first.'},
+  {id:'changed',name:'Existing vendor, new account',company:'Northstar Studio',category:'Core demo',expected:'pending',check:'bank-change',baseline:'clean',description:'Banking differs from the approved baseline. Retain the original record.'},
+  {id:'duplicate',name:'Identical repeat submission',company:'Northstar Studio',category:'Registry',expected:'rejected',check:'duplicate',baseline:'clean',description:'Company, GSTIN, and bank details match an existing approved vendor.'},
+  {id:'duplicate-incomplete',name:'Duplicate with missing evidence',company:'Northstar Studio',category:'Registry',expected:'pending',check:'doc-bank',baseline:'clean',description:'Missing proof takes precedence over a duplicate match; request evidence first.'},
   {id:'missing-tax',name:'Missing registration',company:'Maple Services',category:'Documents',expected:'pending',check:'doc-tax',description:'Bank proof is present but the registration certificate is missing.'},
   {id:'missing-both',name:'No supporting documents',company:'Birch Partners',category:'Documents',expected:'pending',check:'doc-bank',description:'A complete form cannot substitute for the two required documents.'},
   {id:'invalid-tax',name:'Invalid GSTIN checksum',company:'Orchid Supplies',category:'Registration',expected:'pending',check:'tax-format',description:'The form and certificate agree, but their tax identifier fails its checksum.'},
@@ -28,8 +28,12 @@ export const SCENARIOS: Scenario[] = [
   {id:'malformed-pdf',name:'Damaged PDF upload',company:'Stonebridge Tools',category:'File handling',expected:'pending',check:'doc-bank',description:'A file named PDF is not a valid PDF. The run records the extraction error.'},
   {id:'page-limit',name:'PDF exceeds ten pages',company:'Silverleaf Systems',category:'File handling',expected:'pending',check:'doc-tax',description:'An eleven-page PDF exceeds the bounded extraction policy and needs review.'},
   {id:'country',name:'Country outside current policy',company:'Redwood Export',category:'Registration',expected:'pending',check:'country',description:'A US submission is explicitly held for manual review under the India-only policy.'},
+  {id:'duplicate-name',name:'Repeat with legal-name abbreviations',company:'Northstar Studio',category:'Registry',expected:'rejected',check:'duplicate',baseline:'clean',description:'An approved vendor resubmits with lowercase text and Pvt. Ltd. abbreviations. Normalization still identifies the duplicate.'},
+  {id:'duplicate-account-format',name:'Repeat with formatted account number',company:'Northstar Studio',category:'Registry',expected:'rejected',check:'duplicate',baseline:'clean',description:'Spaces and hyphens change how the account is written, not which account it is. Reject the repeated onboarding.'},
+  {id:'duplicate-json',name:'Same vendor, new document format',company:'Northstar Studio',category:'Registry',expected:'rejected',check:'duplicate',baseline:'clean',description:'Fresh JSON documents contain the same approved identity and banking details. A new file format does not make a new vendor.'},
+  {id:'duplicate-oakline',name:'Second approved vendor resubmits',company:'Oakline Services',category:'Registry',expected:'rejected',check:'duplicate',baseline:'normalized',description:'Oakline repeats its approved registration and bank details. Link the rejection to Oakline’s own original approval.'},
 ];
-export const CATEGORIES = ['All cases', ...new Set(SCENARIOS.map(s => s.category))];
+export const CATEGORIES = ['All cases', 'Rejected', ...new Set(SCENARIOS.map(s => s.category))];
 export type DemoDocument = {name: string; content: string; type: string};
 export type DemoSubmission = {input: Submission; tax: DemoDocument | null; bank: DemoDocument | null; scenarioId: string; suiteId: string};
 export function newSuiteId() { return crypto.randomUUID().replaceAll('-', '').slice(0, 12); }
@@ -60,16 +64,20 @@ function pdf(lines: string[], pages = 1) {
 export function buildScenario(id: string, suiteId: string): DemoSubmission {
   const sample = SCENARIOS.find(s=>s.id===id);
   if (!sample || !/^[a-zA-Z0-9-]{1,40}$/.test(suiteId)) throw new Error('Unknown sample scenario or invalid sample batch.');
-  const index = SCENARIOS.indexOf(sample);
-  const baseline = sample.baseline || id==='clean';
-  const company = baseline ? 'Northstar Studio' : sample.company;
-  const input: Submission = {legalName:`${company} Sample ${suiteId.slice(0,6)} Private Limited`,email:`demo-${id}@vendor.example`,country:'IN',taxId:identifier(suiteId,baseline?0:index),account:'102030405678',bankCode:'HDFC0001234'};
+  const original = sample.baseline ? SCENARIOS.find(s=>s.id===sample.baseline)! : sample;
+  const index = SCENARIOS.indexOf(original);
+  const company = original.company;
+  const input: Submission = {legalName:`${company} Sample ${suiteId.slice(0,6)} Private Limited`,email:`demo-${id}@vendor.example`,country:'IN',taxId:identifier(suiteId,index),account:'102030405678',bankCode:'HDFC0001234'};
   if (id==='changed') input.account='908070605432';
   if (id==='invalid-tax') input.taxId=input.taxId.slice(0,14)+(input.taxId[14]==='0'?'1':'0');
   if (id==='invalid-banking') {input.account='12345';input.bankCode='HDFC123';}
   if (id==='country') input.country='US';
+  if (id==='duplicate-name') input.legalName=input.legalName.toLowerCase().replace('private limited','pvt. ltd.');
+  if (id==='duplicate-account-format') input.account='1020-3040 5678';
   const taxFields: Record<string,string> = {legalName:input.legalName,taxId:input.taxId};
   const bankFields: Record<string,string> = {legalName:input.legalName,account:input.account,bankCode:input.bankCode};
+  if (id==='duplicate-name') {taxFields.legalName=`${company} Sample ${suiteId.slice(0,6)} Private Limited`;bankFields.legalName=taxFields.legalName;}
+  if (id==='duplicate-account-format') bankFields.account='102030405678';
   if (id==='mismatch') bankFields.legalName='Cedar Logistics Private Limited';
   if (id==='tax-mismatch') taxFields.taxId=identifier(suiteId,index+100);
   if (id==='name-mismatch') taxFields.legalName='Aspen Holdings Private Limited';
@@ -85,6 +93,7 @@ export function buildScenario(id: string, suiteId: string): DemoSubmission {
   let bank: DemoDocument|null = {name:`sample-${id}-bank.pdf`,type:'application/pdf',content:pdf(lines(bankFields,true))};
   if (id==='missing'||id==='missing-both'||id==='duplicate-incomplete') bank=null;
   if (id==='missing-tax'||id==='missing-both') tax=null;
+  if (id==='duplicate-json') {tax={name:'sample-repeat-registration.json',type:'application/json',content:JSON.stringify(taxFields)};bank={name:'sample-repeat-bank.json',type:'application/json',content:JSON.stringify(bankFields)};}
   if (id==='conflicting') bank={name:'sample-conflicting-bank.txt',type:'text/plain',content:[...lines(bankFields,true),'Account number: 777777775678'].join('\n')};
   if (id==='unlabelled') bank={name:'sample-unlabelled-bank.txt',type:'text/plain',content:`Fictional correspondence. ${input.legalName} banks with HDFC. Reference ${input.account}. No labelled confirmation fields are supplied.`};
   if (id==='invalid-json') tax={name:'sample-broken-registration.json',type:'application/json',content:'{"legalName": "Broken document",'};

@@ -20,8 +20,7 @@ for(const scenario of SCENARIOS){
 }
 const history=await(await fetch(`${origin}/api/reviews`)).json();
 for(const review of results)assert.ok(history.reviews.some(r=>r.id===review.id&&r.sample?.suiteId===suite),'Sample not persisted');
-const baseline=results.find(r=>r.sample.scenarioId==='clean');
-for(const id of ['changed','duplicate','duplicate-incomplete'])assert.equal(results.find(r=>r.sample.scenarioId===id).relatedRunId,baseline.id);
+for(const scenario of SCENARIOS.filter(s=>s.baseline)){const baseline=results.find(r=>r.sample.scenarioId===scenario.baseline);assert.equal(results.find(r=>r.sample.scenarioId===scenario.id).relatedRunId,baseline.id,scenario.id);}
 console.log(`Verified ${results.length} actual submissions, six-stage streams, saved evidence, masked accounts, sample labels, and baseline links.`);
 const oversize=scenarioFormData(buildScenario('missing',newSuiteId()));
 oversize.set('bank',new File(['x'.repeat(2*1024*1024+1)],'too-large.txt'));

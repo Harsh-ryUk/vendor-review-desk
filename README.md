@@ -4,7 +4,7 @@ A working PS-2 vendor onboarding process: receive a form and supporting document
 
 This version supports India and explicitly labelled, text-based documents. It uses a PDF/text/JSON parser and deterministic rules; it does not call an AI model, perform OCR, or verify records with a government or bank. The public demo uses a shared workspace with fictional sample data.
 
-**Try three manual submissions:** [copyable vendor details and matching upload documents](docs/manual-submissions.md). The examples demonstrate approval, missing bank proof, and an account-holder mismatch. For one-click preparation and all 26 cases, use the app's **Demo workspace**.
+**Try three manual submissions:** [copyable vendor details and matching upload documents](docs/manual-submissions.md). The examples demonstrate approval, missing bank proof, and an account-holder mismatch. For one-click preparation and all 30 cases, use the app's **Demo workspace**.
 
 **Live demo:** [Vendor Review Desk](https://vendor-review-desk.harshmahar786.workers.dev/) (public recruiter demo; no sign-in required).
 
@@ -39,9 +39,9 @@ Run Everything matches before the bank-change or duplicate cases. Each load of a
 
 ## Expanded sample workspace
 
-The Demo workspace includes 26 runnable cases across core flows, registration, banking, documents, file handling, and registry behavior. Category filters keep the four core interview cases easy to find. Load a case to inspect its form and generated PDF/TXT/JSON evidence, then run it through the normal server endpoint.
+The Demo workspace includes 30 runnable cases across core flows, registration, banking, documents, file handling, and registry behavior. Category filters keep the four core interview cases easy to find. Load a case to inspect its form and generated PDF/TXT/JSON evidence, then run it through the normal server endpoint.
 
-**Run all 26 samples** submits every case sequentially through the same six-stage live stream. It creates its own fresh baseline, records actual outcomes and expected-reason checks, and saves all results in history. You can stop after the current review; completed runs remain saved. Every generated record carries a Sample label, scenario name, and batch ID. A full successful batch produces two approvals, one duplicate rejection, and 23 pending reviews. No email is sent.
+**Run all 30 samples** submits every case sequentially through the same six-stage live stream. It creates its own fresh baseline, records actual outcomes and expected-reason checks, and saves all results in history. You can stop after the current review; completed runs remain saved. Every generated record carries a Sample label, scenario name, and batch ID. A full successful batch produces two approvals, five duplicate rejections, and 23 pending reviews. No email is sent.
 
 Coverage includes missing one or both documents; invalid GSTIN checksum; mismatched certificate names and identifiers; legal-name normalization; full account comparison despite matching masked endings; IFSC conflict and invalid banking structure; expired and impossible dates; contradictory labels; unlabelled evidence; malformed and incorrectly typed JSON; incomplete certificates; unreadable and malformed PDFs; page limits; unsupported country; changed banking; and missing evidence taking precedence over duplicate rejection.
 
@@ -90,7 +90,7 @@ TEST_ORIGIN=http://127.0.0.1:5173 npm run test:scenarios
 npm run build
 ```
 
-The sample-suite integration script only accepts loopback origins. It verifies all 26 documented outcomes, saved sample labels, expected reasons, account masking, live streams, and baseline links. It also checks size/field limits, malformed requests, unsupported files, missing required details, and concurrent approvals.
+The sample-suite integration script only accepts loopback origins. It verifies all 30 documented outcomes, saved sample labels, expected reasons, account masking, live streams, and baseline links. It also checks size/field limits, malformed requests, unsupported files, missing required details, and concurrent approvals.
 
 The API integration script requires a running local preview and writes test data to its local database. It checks PDF submissions, missing evidence, banking conflict, changes against an approved record, duplicates, masking, saved stage events, malformed requests, and concurrent approval protection. It must not be pointed at a production system containing real vendor data.
 
@@ -98,7 +98,7 @@ The API integration script requires a running local preview and writes test data
 
 | File | Purpose |
 | --- | --- |
-| `lib/scenarios.ts` | 26 fictional input builders and small valid PDF fixtures |
+| `lib/scenarios.ts` | 30 fictional input builders and small valid PDF fixtures |
 | `lib/run-review.ts` | Shared streamed review client for individual and batch submissions |
 | `app/page.tsx` | Overview, forms, demo workspace, live trail, evidence, and policy |
 | `app/api/reviews/route.ts` | Multipart intake, real progress stream, registry lookups, persistence |
