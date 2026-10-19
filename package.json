@@ -14,7 +14,12 @@
     "db:generate": "drizzle-kit generate",
     "test": "node --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "test:scenarios": "node scripts/test-scenarios.mjs"
+    "test:scenarios": "node scripts/test-scenarios.mjs",
+    "build:cloudflare": "node scripts/cloudflare.mjs build",
+    "dev:cloudflare": "node scripts/cloudflare.mjs dev",
+    "deploy:cloudflare": "node scripts/cloudflare.mjs deploy",
+    "db:migrate:cloudflare": "node scripts/cloudflare.mjs migrate",
+    "check:cloudflare": "node scripts/cloudflare.mjs dry-run"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

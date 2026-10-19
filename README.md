@@ -8,6 +8,8 @@ This version supports India and explicitly labelled, text-based documents. It us
 
 **Live demo:** [Vendor Review Desk](https://vendor-review-desk.kuku-technol-9786.chatgpt.site/) (access-controlled; the owner must grant reviewer access).
 
+**Host from your own GitHub repo:** [Cloudflare deployment guide](docs/cloudflare-deployment.md). The repository includes an independent Workers + D1 target with a public recruiter-demo URL after you connect your account and database.
+
 ## Run the app
 
 Requires Node.js 22.13+ and npm. No API key is needed.
