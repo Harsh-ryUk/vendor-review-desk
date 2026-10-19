@@ -1,0 +1,26 @@
+{
+  "northstar": {
+    "legalName": "Northstar Studio Private Limited",
+    "email": "finance@northstar.example",
+    "country": "IN",
+    "taxId": "29AAACN1234A1Z3",
+    "account": "102030405678",
+    "bankCode": "HDFC0001234"
+  },
+  "willow": {
+    "legalName": "Willow Works Private Limited",
+    "email": "accounts@willow.example",
+    "country": "IN",
+    "taxId": "27AAACW4321B1ZU",
+    "account": "204060801234",
+    "bankCode": "ICIC0001234"
+  },
+  "cedar": {
+    "legalName": "Cedar Supply Private Limited",
+    "email": "finance@cedar.example",
+    "country": "IN",
+    "taxId": "29AAACC5678C1ZM",
+    "account": "305070901234",
+    "bankCode": "HDFC0001234"
+  }
+}

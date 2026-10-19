@@ -1,0 +1,3 @@
+Account holder: Cedar Logistics Private Limited
+Account number: 305070901234
+IFSC: HDFC0001234

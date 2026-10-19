@@ -1,0 +1,3 @@
+Account holder: Northstar Studio Pvt. Ltd.
+Account number: 102030405678
+IFSC: HDFC0001234
