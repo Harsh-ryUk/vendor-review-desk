@@ -5,9 +5,9 @@ Aim for 4 minutes 40 seconds. Use a screen recorder and your own narration. No s
 ## Prepare before recording
 
 1. Open the deployed app and confirm that your recording browser can access it.
-2. Check the registry state. If Northstar is already approved, its next clean submission will be rejected as a duplicate. You can show that saved approval and run a genuinely new fictional company for a fresh happy path, using matching JSON evidence as described in the README.
+2. Load Everything matches for a fresh fictional company identifier. Keep the same tab open so changed-bank and duplicate cases can reuse this approved baseline. Do not reload between these dependent cases.
 3. Keep the clean Northstar result available so the changed-bank scenario has an approved baseline.
-4. Rehearse the clean path and Cedar conflict once. Verify extraction and the history view.
+4. Rehearse the clean path and Cedar conflict once. Verify extraction and history. The full 26-case suite is available for preparation; keep the recording focused on the core cases.
 5. Hide unrelated browser tabs and notifications. Use the app at a readable desktop width.
 
 ## 0:00–0:25 — Explain the user and problem
@@ -20,7 +20,7 @@ Point to the overview: actual submission counts, statuses, search, and recorded 
 
 Open the demo workspace and load the clean submission. Show the form and attached sample registration and bank PDFs.
 
-“The sample companies and identifiers are fictional, but these are actual PDF files. Loading the example only fills the form. Clicking Run starts the same process used for any upload.”
+“The sample companies and identifiers are fictional, but these are actual generated PDF files with labelled fields. Loading the example only fills the form. Clicking Run starts the same process used for any upload.”
 
 Run the review. Show the execution trail and the approved result.
 
@@ -42,7 +42,7 @@ Show the expanded failed check and then the **Vendor response** tab.
 
 If time permits, run Northstar’s changed-bank scenario after its clean approval. Show the related original run.
 
-“A familiar tax ID does not make new bank details safe. This request is held for independent verification. The existing approved banking record is not overwritten. Repeating the original clean details instead produces a duplicate rejection.”
+“A familiar tax ID does not make new bank details safe. This request is held for independent verification. The existing approved banking record is not overwritten. Loading Identical repeat submission reuses the approved baseline and produces a duplicate rejection.”
 
 ## 3:45–4:15 — Show persistence and explain decisions
 

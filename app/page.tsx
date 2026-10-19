@@ -2,24 +2,15 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, Building2, Check, CheckCheck, CheckCircle2, ChevronRight, CircleAlert, CircleX, ClipboardCheck, Clock3, Copy, FileCheck2, FileSearch, FileText, FlaskConical, History, LayoutDashboard, Loader2, Mail, Plus, Search, ShieldCheck, SlidersHorizontal, Upload, X } from "lucide-react";
-import { STAGES, gstCheckDigit, type Review, type Stage, type Submission, type Status, type Evidence } from "../lib/review";
+import { STAGES, type Review, type Stage, type Submission, type Status, type Evidence } from "../lib/review";
+
+import { SCENARIOS, CATEGORIES, buildScenario, newSuiteId, scenarioFormData } from "../lib/scenarios";
+import { runReview } from "../lib/run-review";
 
 type View = "queue" | "history" | "demo" | "policy" | "new" | "run";
 type Filter = "all" | Status;
 const empty: Submission = { legalName: "", email: "", country: "IN", taxId: "", account: "", bankCode: "" };
 const statusLabels = { approved: "Approved", pending: "Needs review", rejected: "Rejected" };
-const samples = [
-  { id: "clean", label: "01", name: "Everything matches", company: "Northstar Studio", expected: "Approved", description: "Two readable documents. Names, registration, and banking details agree.", icon: CheckCircle2, tone: "approved" },
-  { id: "missing", label: "02", name: "Missing bank proof", company: "Willow Works", expected: "Pending", description: "Registration is complete, but bank proof is missing. Request the exact document.", icon: FileSearch, tone: "pending" },
-  { id: "mismatch", label: "03", name: "A different account holder", company: "Cedar Supply", expected: "Pending", description: "The account belongs to another company. Surface the conflicting evidence.", icon: CircleAlert, tone: "pending" },
-  { id: "changed", label: "04", name: "Existing vendor, new account", company: "Northstar Studio", expected: "Pending after scenario 01", description: "The same GSTIN returns with different banking details. Keep the approved record unchanged.", icon: ShieldCheck, tone: "pending" },
-];
-function taxId(prefix: string) { return prefix + gstCheckDigit(prefix); }
-function scenarioInput(id: string): Submission {
-  if (id === "missing") return { legalName: "Willow Works Private Limited", email: "accounts@willow.example", country: "IN", taxId: taxId("27AAACW4321B1Z"), account: "204060801234", bankCode: "ICIC0001234" };
-  if (id === "mismatch") return { legalName: "Cedar Supply Private Limited", email: "finance@cedar.example", country: "IN", taxId: taxId("29AAACC5678C1Z"), account: "305070901234", bankCode: "HDFC0001234" };
-  return { legalName: "Northstar Studio Private Limited", email: "finance@northstar.example", country: "IN", taxId: taxId("29AAACN1234A1Z"), account: id === "changed" ? "908070605432" : "102030405678", bankCode: "HDFC0001234" };
-}
 function dateLabel(value: string) { return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value)); }
 function durationLabel(ms: number) { return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`; }
 function download(name: string, text: string, type = "application/json") {
@@ -51,6 +42,13 @@ export default function App() {
   const [resultTab, setResultTab] = useState<"checks" | "documents" | "response">("checks");
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState("");
+  const [caseCategory, setCaseCategory] = useState("All cases");
+  const [demoSeed, setDemoSeed] = useState("");
+  const [loadedSeed, setLoadedSeed] = useState("");
+  const [suiteResults, setSuiteResults] = useState<{id:string;review:Review;matches:boolean}[]>([]);
+  const [suiteStage, setSuiteStage] = useState("");
+  const [suiteRunning, setSuiteRunning] = useState(false);
+  const stopSuite = useRef(false);
   const didReadLink = useRef(false);
 
   async function refresh() {
@@ -91,50 +89,49 @@ export default function App() {
   async function loadScenario(id: string) {
     setLoadingScenario(id); setError("");
     try {
-      const prefix = id === "missing" ? "willow" : id === "mismatch" ? "cedar" : "northstar";
-      async function load(fileName: string) {
-        const res = await fetch(`/samples/${fileName}`);
-        if (!res.ok) throw new Error("A sample document could not be loaded. Retry or upload a document.");
-        return new File([await res.blob()], fileName, { type: "application/pdf" });
-      }
-      const tax = await load(`${prefix}-registration.pdf`);
-      const bank = id === "missing" ? null : await load(`${prefix}-${id === "changed" ? "changed-bank" : "bank"}.pdf`);
-      setInput(scenarioInput(id)); setTaxFile(tax); setBankFile(bank); setScenario(id); navigate("new");
+      const seed = id === "clean" || id === "normalized" ? newSuiteId() : demoSeed || newSuiteId();
+      if (SCENARIOS.find(s => s.id === id)?.baseline && !reviews.some(r => r.sample?.suiteId === seed && r.sample.scenarioId === "clean" && r.status === "approved")) throw new Error("Run Everything matches first to create this sample batch’s approved baseline, or use Run all samples.");
+      const sample = buildScenario(id, seed);
+      const file = (doc: typeof sample.tax) => doc ? new File([doc.content], doc.name, {type:doc.type}) : null;
+      if (id === "clean" || !demoSeed) setDemoSeed(seed); setLoadedSeed(seed); setInput(sample.input); setTaxFile(file(sample.tax)); setBankFile(file(sample.bank)); setScenario(id); navigate("new");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load scenario."); }
     finally { setLoadingScenario(""); }
+  }
+  async function runSampleSuite() {
+    const seed = newSuiteId(); setDemoSeed(seed); setSuiteResults([]); setError(""); setSuiteRunning(true); setRunning(true); stopSuite.current = false;
+    try {
+      for (const sample of SCENARIOS) {
+        if (stopSuite.current) break;
+        setSuiteStage(`${sample.name} · Starting`);
+        const review = await runReview(scenarioFormData(buildScenario(sample.id, seed)), event => {
+          if (event.type === "stage") setSuiteStage(`${sample.name} · ${event.stage.label}`);
+        });
+        const matches = review.status === sample.expected && review.stages.length === 6 && !!review.checks.find(c => c.id === sample.check && (sample.expected === "approved" ? c.state === "pass" : c.state !== "pass"));
+        setSuiteResults(previous => [...previous, {id:sample.id,review,matches}]);
+        setReviews(previous => [review,...previous.filter(r=>r.id!==review.id)]);
+      }
+    } catch (e) {setError(e instanceof Error ? e.message : "Sample batch stopped. Check history before retrying.");}
+    finally {setSuiteRunning(false);setRunning(false);setSuiteStage("");}
   }
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(""); setActive(null); setStages([]); setRunId(""); setRunning(true); setView("run"); setResultTab("checks");
     try {
       const form = new FormData(); Object.entries(input).forEach(([key, value]) => form.set(key, value));
       if (taxFile) form.set("tax", taxFile); if (bankFile) form.set("bank", bankFile);
-      const res = await fetch("/api/reviews", { method: "POST", body: form });
-      if (!res.ok) { const data = await res.json() as { error?: string }; throw new Error(data.error || "The review could not be started."); }
-      if (!res.body) throw new Error("The review stream is unavailable.");
-      const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = "", complete = false;
-      function onLine(line: string) {
-        if (!line.trim()) return;
-        const data = JSON.parse(line);
+      if (scenario && loadedSeed) {form.set("demoScenario",scenario);form.set("demoSuite",loadedSeed);}
+      await runReview(form, data => {
         if (data.type === "start") setRunId(data.id);
         if (data.type === "stage") setStages(previous => [...previous.filter(x => x.id !== data.stage.id), data.stage]);
-        if (data.type === "error") throw new Error(data.message);
         if (data.type === "complete") {
-          complete = true; setActive(data.review); setReviews(previous => [data.review, ...previous.filter(x => x.id !== data.review.id)]);
+          setActive(data.review); setReviews(previous => [data.review, ...previous.filter(x => x.id !== data.review.id)]);
           window.history.replaceState({}, "", `?run=${data.review.id}`);
         }
-      }
-      while (true) {
-        const { done, value } = await reader.read(); buffer += decoder.decode(value, {stream: !done});
-        const lines = buffer.split("\n"); buffer = lines.pop() || ""; lines.forEach(onLine);
-        if (done) break;
-      }
-      if (buffer) onLine(buffer);
-      if (!complete) throw new Error("Connection ended before completion. Check history before retrying.");
+      });
     } catch (e) { setError(e instanceof Error ? e.message : "The review failed."); }
     finally { setRunning(false); }
   }
   const counts = { all: reviews.length, approved: reviews.filter(r => r.status === "approved").length, pending: reviews.filter(r => r.status === "pending").length, rejected: reviews.filter(r => r.status === "rejected").length };
-  const filtered = reviews.filter(r => (filter === "all" || r.status === filter) && `${r.company} ${r.id} ${r.input.taxId} ${r.input.email}`.toLowerCase().includes(query.toLowerCase()));
+  const filtered = reviews.filter(r => (filter === "all" || r.status === filter) && `${r.company} ${r.id} ${r.input.taxId} ${r.input.email} ${r.sample?.label || ""}`.toLowerCase().includes(query.toLowerCase()));
   const navItems = [ {id: "queue", icon: LayoutDashboard, label: "Overview"}, {id: "history", icon: History, label: "Run history"}, {id: "demo", icon: FlaskConical, label: "Demo workspace"}, {id: "policy", icon: SlidersHorizontal, label: "Review policy"} ] as const;
 
   return <div className="app-shell">
@@ -157,23 +154,28 @@ export default function App() {
           {counts.pending > 0 && <div className="queue-alert"><span className="queue-alert-icon"><Clock3 size={19}/></span><div><strong>{counts.pending} submission{counts.pending === 1 ? " needs" : "s need"} your attention</strong><p>Open the flagged checks to see what’s needed next.</p></div><button className="text-button" onClick={() => { setFilter("pending"); document.getElementById("submissions")?.scrollIntoView({behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block:"start"}); }}>Review queue<ArrowRight size={15}/></button></div>}
           <div className="dashboard-grid"><section id="submissions" className="panel submissions-panel" aria-label="Submissions"><div className="panel-heading"><div><h2>{view === "history" ? "Recorded runs" : "Recent submissions"}</h2><p>Open a run to see the full decision trail.</p></div><button className="icon-button" aria-label="Refresh history" disabled={loading} onClick={() => void refresh()}><History size={17} className={loading ? "spin" : ""}/></button></div>
             <div className="table-tools"><div className="filter-tabs" aria-label="Filter submissions">{(["all", "pending", "approved", "rejected"] as const).map(f => <button key={f} data-status={f} className={`status-filter ${filter === f ? "current" : ""}`} onClick={() => setFilter(f)} aria-pressed={filter === f}>{f === "all" ? "All runs" : f === "pending" ? "Needs review" : statusLabels[f]}<span>{counts[f]}</span></button>)}</div><label className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search vendors…" aria-label="Search vendors"/></label></div>
-            <div className="table-wrap"><table><thead><tr><th>Vendor</th><th>Status</th><th className="outcome-column">Review outcome</th><th>Submitted</th><th><span className="sr-only">Open run</span></th></tr></thead><tbody>{filtered.map(review => <tr key={review.id}><td><button className="vendor-link" onClick={() => openReview(review)}><span className="company-avatar">{review.company.replace(/[^A-Za-z ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(x => x[0]).join("")}</span><span><strong>{review.company}</strong><small>{review.id}</small></span></button></td><td><Badge status={review.status}/></td><td className="outcome-column outcome-cell">{review.checks.find(check => check.state !== "pass")?.label || "All checks passed"}</td><td className="date-cell">{dateLabel(review.createdAt)}</td><td><button className="icon-button" aria-label={`View ${review.company} review ${review.id}`} onClick={() => openReview(review)}><ArrowUpRight size={17}/></button></td></tr>)}</tbody></table></div>
+            <div className="table-wrap"><table><thead><tr><th>Vendor</th><th>Status</th><th className="outcome-column">Review outcome</th><th>Submitted</th><th><span className="sr-only">Open run</span></th></tr></thead><tbody>{filtered.map(review => <tr key={review.id}><td><button className="vendor-link" onClick={() => openReview(review)}><span className="company-avatar">{review.company.replace(/[^A-Za-z ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(x => x[0]).join("")}</span><span><strong>{review.company}</strong><small>{review.sample && <span className="sample-tag">Sample</span>}{review.id}</small></span></button></td><td><Badge status={review.status}/></td><td className="outcome-column outcome-cell">{review.checks.find(check => check.state !== "pass")?.label || "All checks passed"}</td><td className="date-cell">{dateLabel(review.createdAt)}</td><td><button className="icon-button" aria-label={`View ${review.company} review ${review.id}`} onClick={() => openReview(review)}><ArrowUpRight size={17}/></button></td></tr>)}</tbody></table></div>
             {!filtered.length && <div className="empty-state"><div className="empty-illustration"><span/><FileCheck2 size={34}/><span/></div><h3>{loading ? "Loading your review history…" : reviews.length ? "No submissions match" : "Your first review starts here"}</h3><p>{reviews.length ? "Try another search or status filter." : "Submit a vendor and their documents. We’ll check the details and keep the reasoning with the result."}</p>{!reviews.length && !loading && <button className="button secondary" onClick={newSubmission}><Plus size={16}/>Create a submission</button>}</div>}
             <div className="table-footer"><span>{filtered.length} of {reviews.length} recorded runs{reviews.length >= 200 ? " · Latest 200 shown" : ""}</span><button className="text-button" disabled={!filtered.length} onClick={() => download("vendor-reviews.json", JSON.stringify(filtered, null, 2))}><ArrowDownToLine size={14}/>Export results</button></div>
           </section>
           <aside className="dashboard-aside"><section className="journey-panel"><div className="mini-label"><span className="live-dot"/>POLICY v1.0</div><h2>How reviews are checked</h2><div className="mini-process">{[{icon:Upload,label:"Receive",detail:"Company details + documents"},{icon:FileSearch,label:"Read & compare",detail:"Registration and bank evidence"},{icon:ShieldCheck,label:"Check",detail:"Policy rules + vendor registry"},{icon:ClipboardCheck,label:"Decide",detail:"Status, reasoning, and next steps"}].map((step,i) => <div className="mini-step" key={step.label}><span className="mini-step-icon"><step.icon size={17}/></span><div><strong>{step.label}</strong><p>{step.detail}</p></div><span className="step-number">0{i+1}</span></div>)}</div><div className="journey-note"><Check size={14}/>Decision rules are visible in every run.</div></section><section className="demo-nudge"><div className="nudge-icon"><FlaskConical size={20}/></div><h3>Test the review rules</h3><p>Try sample documents with missing proof, conflicting names, or changed bank details.</p><button className="text-button" onClick={() => navigate("demo")}>Open demo workspace<ArrowRight size={15}/></button></section></aside></div>
         </>}
         {view === "demo" && <>
-          <div className="page-heading"><div><p className="eyebrow">PREPARED SCENARIOS</p><h1>Demo workspace</h1><p className="page-description">Real sample inputs. The same review process. No precomputed results.</p></div><button className="button secondary" onClick={newSubmission}><Plus size={16}/>Use your own inputs</button></div>
-          <div className="info-strip"><FlaskConical size={20}/><p>All examples use fictional companies and banking details. Loading a scenario fills the form and attaches sample PDFs. <strong>You start the actual review.</strong></p></div>
-          <div className="scenario-grid">{samples.map(sample => <section className="scenario-card" key={sample.id}><div className="scenario-top"><span className="mono">SCENARIO {sample.label}</span><span className={`scenario-icon ${sample.tone}`}><sample.icon size={22}/></span></div><h2>{sample.name}</h2><p>{sample.description}</p><div className="scenario-expected"><span>Expected result</span><strong>{sample.expected}</strong></div><button className="button secondary" disabled={!!loadingScenario} onClick={() => void loadScenario(sample.id)}>{loadingScenario === sample.id ? <Loader2 className="spin" size={16}/> : <FileText size={16}/>}Load {sample.company}<ArrowRight size={16}/></button></section>)}</div>
-          <section className="panel demo-guide"><h2>A useful demo sequence</h2><ol><li>Run scenario 01 to approve Northstar and create its registry record.</li><li>Run scenario 03 to show an account-holder conflict and the generated follow-up.</li><li>Run scenario 04 to demonstrate a protected banking change against the approved record.</li><li>Repeat scenario 01 to show duplicate rejection. All runs remain in history.</li></ol><p>Starting with scenario 04 on a fresh registry can approve it: a banking change only exists relative to a previous approval.</p></section>
+          <div className="page-heading"><div><p className="eyebrow">PREPARED SCENARIOS</p><h1>Demo workspace</h1><p className="page-description">Real sample inputs. The same review process. No precomputed results.</p></div><button className="button secondary" disabled={running} onClick={newSubmission}><Plus size={16}/>Use your own inputs</button></div>
+          <section className="panel sample-suite" aria-label="Sample submission suite"><div><p className="mini-label">{SCENARIOS.length} REAL SUBMISSIONS · FICTIONAL DATA</p><h2>Exercise every review path</h2><p>Run the full sample batch to create real decisions, evidence, and history. Each batch uses fresh sample identifiers and creates its own approved baseline. No emails are sent.</p></div><div className="suite-actions"><button className="button primary" disabled={running || !!loadingScenario} onClick={() => void runSampleSuite()}>{suiteRunning ? <Loader2 size={16} className="spin"/> : <FlaskConical size={16}/>}Run all {SCENARIOS.length} samples</button>{suiteRunning && <button className="button secondary" onClick={() => {stopSuite.current=true;setNotice("The batch will stop after its current review finishes.");}}>Stop after current</button>}</div>
+          {(suiteRunning || suiteResults.length > 0) && <div className="suite-progress" role="status"><strong>{suiteResults.length} / {SCENARIOS.length} completed · {suiteResults.filter(r=>r.matches).length} matched expectations</strong><progress value={suiteResults.length} max={SCENARIOS.length} aria-label="Sample batch progress"/><span>{suiteStage || (suiteResults.length === SCENARIOS.length ? "Batch complete. Every result is saved in run history." : "Batch stopped. Completed results remain saved.")}</span></div>}
+          {suiteResults.length > 0 && <details className="suite-results" open={!suiteRunning}><summary>Inspect batch results ({suiteResults.length})</summary><div className="table-wrap"><table><thead><tr><th>Scenario</th><th>Expected</th><th>Actual</th><th>Verification</th><th>Run</th></tr></thead><tbody>{suiteResults.map(result => <tr key={result.id}><td>{result.review.sample?.label}</td><td>{statusLabels[SCENARIOS.find(s=>s.id===result.id)!.expected]}</td><td><Badge status={result.review.status}/></td><td className={result.matches?"suite-pass":"suite-fail"}>{result.matches?"Matched":"Inspect result"}</td><td><button className="text-button" disabled={running} onClick={()=>openReview(result.review)}>Open<ArrowUpRight size={14}/></button></td></tr>)}</tbody></table></div></details>}
+          </section>
+          <div className="case-filters" role="group" aria-label="Filter sample cases">{CATEGORIES.map(category=><button key={category} aria-pressed={caseCategory===category} onClick={()=>setCaseCategory(category)}>{category}<span>{category==='All cases'?SCENARIOS.length:SCENARIOS.filter(s=>s.category===category).length}</span></button>)}</div>
+          <div className="scenario-grid">{SCENARIOS.filter(sample=>sample.category==='Core demo' && (caseCategory==='All cases'||caseCategory===sample.category)).map((sample,i) => <section className="scenario-card" key={sample.id}><div className="scenario-top"><span className="mono">CORE DEMO {String(i+1).padStart(2,'0')}</span><span className={`scenario-icon ${sample.expected}`}><FlaskConical size={22}/></span></div><h2>{sample.name}</h2><p>{sample.description}</p><div className="scenario-expected"><span>Expected result</span><strong>{statusLabels[sample.expected]}</strong></div>{sample.baseline && <p className="baseline-note">Run Everything matches first.</p>}<button className="button secondary" disabled={!!loadingScenario||running} onClick={() => void loadScenario(sample.id)}>{loadingScenario === sample.id ? <Loader2 className="spin" size={16}/> : <FileText size={16}/>}Load {sample.company}<ArrowRight size={16}/></button></section>)}</div>
+          {SCENARIOS.some(sample=>sample.category!=='Core demo'&&(caseCategory==='All cases'||caseCategory===sample.category)) && <section className="panel extra-cases"><div className="panel-heading"><div><h2>Additional edge cases</h2><p>Load a case to inspect its form and actual supporting files, then start the review.</p></div></div><div className="case-list">{SCENARIOS.filter(sample=>sample.category!=='Core demo'&&(caseCategory==='All cases'||caseCategory===sample.category)).map(sample=><article className="case-row" key={sample.id}><div><span className="mini-label">{sample.category}</span><h3>{sample.name}</h3><p>{sample.description}{sample.baseline?' Run Everything matches first.':''}</p></div><Badge status={sample.expected}/><button className="button secondary small" disabled={!!loadingScenario||running} onClick={()=>void loadScenario(sample.id)}>{loadingScenario===sample.id?<Loader2 size={15} className="spin"/>:<FileText size={15}/>}Load case</button></article>)}</div></section>}
+          <section className="panel demo-guide"><h2>A focused five-minute demo</h2><ol><li>Load Everything matches and run the approval.</li><li>Show Different account holder and its exact follow-up request.</li><li>Show Existing vendor, new account against that approval.</li><li>Load Identical repeat submission to demonstrate duplicate rejection.</li></ol><p>File size, unsupported uploads, required fields, and concurrent approvals are also checked in automated verification. The extra cases are available for deeper testing. Loading a case creates no result; running it performs the same server checks as any other submission. Full batches record their fictional sample label in history.</p></section>
         </>}
         {view === "new" && <>
           <button className="back-button" onClick={() => navigate("queue")}><ArrowLeft size={16}/>Back to overview</button>
           <div className="page-heading compact"><div><p className="eyebrow">NEW REVIEW</p><h1>Submit a vendor</h1><p className="page-description">Add the company’s details and the documents that support them.</p></div></div>
-          {scenario && <div className="info-strip"><FlaskConical size={19}/><p>Sample scenario loaded: <strong>{samples.find(x => x.id === scenario)?.name}</strong>. You can edit the form before running it. Sample companies are fictional.</p></div>}
-          <form onSubmit={submit} className="submission-layout"><div className="form-sections"><section className="panel form-section"><SectionLabel number="01">Company details</SectionLabel><div className="form-grid"><Field label="Registered company name" wide><input required maxLength={200} value={input.legalName} onChange={e => setInput({...input,legalName:e.target.value})} placeholder="e.g. Northstar Studio Private Limited" autoComplete="organization"/></Field><Field label="Contact email"><input required type="email" maxLength={200} value={input.email} onChange={e => setInput({...input,email:e.target.value})} placeholder="finance@company.com" autoComplete="email"/></Field><Field label="Country"><select value={input.country} onChange={e => setInput({...input,country:e.target.value})}><option value="IN">India</option></select></Field><Field label="GSTIN" wide hint="15 characters. Checked for structure, checksum, and consistency with the certificate."><input required maxLength={15} value={input.taxId} onChange={e => setInput({...input,taxId:e.target.value.toUpperCase()})} placeholder="Enter the company’s GSTIN" spellCheck={false} autoComplete="off"/></Field></div></section>
+          {scenario && <div className="info-strip"><FlaskConical size={19}/><p>Sample scenario loaded: <strong>{SCENARIOS.find(x => x.id === scenario)?.name}</strong>. You can edit the form before running it. Sample companies are fictional.</p></div>}
+          <form onSubmit={submit} className="submission-layout"><div className="form-sections"><section className="panel form-section"><SectionLabel number="01">Company details</SectionLabel><div className="form-grid"><Field label="Registered company name" wide><input required maxLength={200} value={input.legalName} onChange={e => setInput({...input,legalName:e.target.value})} placeholder="e.g. Northstar Studio Private Limited" autoComplete="organization"/></Field><Field label="Contact email"><input required type="email" maxLength={200} value={input.email} onChange={e => setInput({...input,email:e.target.value})} placeholder="finance@company.com" autoComplete="email"/></Field><Field label="Country"><select value={input.country} onChange={e => setInput({...input,country:e.target.value})}><option value="IN">India</option><option value="US">United States (manual review)</option></select></Field><Field label="GSTIN" wide hint="15 characters. Checked for structure, checksum, and consistency with the certificate."><input required maxLength={15} value={input.taxId} onChange={e => setInput({...input,taxId:e.target.value.toUpperCase()})} placeholder="Enter the company’s GSTIN" spellCheck={false} autoComplete="off"/></Field></div></section>
           <section className="panel form-section"><SectionLabel number="02">Banking details</SectionLabel><div className="form-grid"><Field label="Bank account number" hint="9–18 digits. Only the last four are retained in the review."><input required inputMode="numeric" maxLength={30} value={input.account} onChange={e => setInput({...input,account:e.target.value})} placeholder="Enter account number" autoComplete="off"/></Field><Field label="IFSC" hint="11 characters, as shown on the bank proof."><input required maxLength={11} value={input.bankCode} onChange={e => setInput({...input,bankCode:e.target.value.toUpperCase()})} placeholder="e.g. HDFC0001234" spellCheck={false} autoComplete="off"/></Field></div></section>
           <section className="panel form-section"><SectionLabel number="03">Supporting documents</SectionLabel><p className="form-description">Text-based PDF, TXT, or JSON. Up to 2 MB and 10 pages per file. Missing or unreadable evidence goes to manual review.</p><div className="upload-grid"><DocumentUpload kind="Registration certificate" description="Company name + GSTIN" file={taxFile} onChange={setTaxFile} onError={setError}/><DocumentUpload kind="Bank account proof" description="Account holder + account number + IFSC" file={bankFile} onChange={setBankFile} onError={setError}/></div></section>
           <div className="form-actions"><span><ShieldCheck size={15}/>Full account numbers are masked after comparison.</span><button className="button primary" type="submit"><ClipboardCheck size={17}/>Run vendor review<ArrowRight size={16}/></button></div></div>
@@ -181,7 +183,7 @@ export default function App() {
         </>}
         {view === "run" && <>
           <button className="back-button" disabled={running} onClick={() => navigate("history")}><ArrowLeft size={16}/>Back to run history</button>
-          <div className="page-heading compact"><div><p className="eyebrow">{running ? "REVIEW IN PROGRESS" : "REVIEW DETAILS"}<span className="mono run-reference">{runId}</span></p><h1>{active?.company || input.legalName || "Vendor review"}</h1><p className="page-description">{running ? "Each stage below reflects work executing on the server." : active ? `${dateLabel(active.createdAt)} · ${durationLabel(active.duration)} total · Policy v${active.policyVersion}` : "The run did not complete. Check history before trying again."}</p></div>{!running && <button className="button secondary" onClick={newSubmission}><Plus size={16}/>New submission</button>}</div>
+          <div className="page-heading compact"><div><p className="eyebrow">{running ? "REVIEW IN PROGRESS" : "REVIEW DETAILS"}<span className="mono run-reference">{runId}</span>{active?.sample && <span className="sample-tag">Sample · {active.sample.label}</span>}</p><h1>{active?.company || input.legalName || "Vendor review"}</h1><p className="page-description">{running ? "Each stage below reflects work executing on the server." : active ? `${dateLabel(active.createdAt)} · ${durationLabel(active.duration)} total · Policy v${active.policyVersion}` : "The run did not complete. Check history before trying again."}</p></div>{!running && <button className="button secondary" onClick={newSubmission}><Plus size={16}/>New submission</button>}</div>
           <div className="run-layout"><aside className="panel execution-panel"><div className="execution-heading"><h2>Execution trail</h2>{running ? <span className="running-label"><span className="live-dot"/>Live</span> : active ? <span className="muted-label">Recorded</span> : null}</div><ol className="execution-stages">{STAGES.map((stage,i) => {
             const actual = stages.find(x => x.id === stage.id);
             return <li key={stage.id} className={actual?.state || "waiting"}><span className="execution-marker">{actual?.state === "complete" ? <Check size={15}/> : actual?.state === "running" ? <Loader2 size={15} className="spin"/> : <span>{i+1}</span>}</span><div><strong>{stage.label}</strong><p>{actual?.detail || "Waiting for previous stage"}</p>{actual?.duration !== undefined && <small>{durationLabel(actual.duration)}</small>}</div></li>;

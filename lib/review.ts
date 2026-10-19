@@ -11,6 +11,7 @@ export type Review = {
   id: string; createdAt: string; status: Status; company: string; input: Submission;
   checks: Check[]; evidence: Evidence[]; stages: Stage[]; duration: number;
   summary: string; response: string; relatedRunId?: string; policyVersion: string;
+  sample?: {scenarioId: string; label: string; suiteId: string};
 };
 export const POLICY_VERSION = "1.0";
 export const STAGES = [

@@ -1,3 +1,4 @@
+import { SCENARIOS } from "../../../lib/scenarios";
 import { env } from "cloudflare:workers";
 import { extractDocument } from "../../../lib/extract";
 import { STAGES, POLICY_VERSION, accountFingerprint, maskAccount, normalizeTax, intakeChecks, documentChecks, registrationChecks, bankingChecks, registryCheck, decision, explain, type Review, type Submission, type Check, type RegistryVendor, type Stage } from "../../../lib/review";
@@ -28,6 +29,9 @@ export async function POST(request: Request) {
     return file instanceof File && file.size > 0 ? [{kind, file}] : [];
   });
   if (files.some(x => x.file.size > 2 * 1024 * 1024)) return json({ error: "Each document must be 2 MB or smaller." }, 413);
+  const demoScenario = SCENARIOS.find(s => s.id === form.get("demoScenario"));
+  const demoSuite = String(form.get("demoSuite") || "");
+  const sample = demoScenario && /^[a-zA-Z0-9-]{1,40}$/.test(demoSuite) ? {scenarioId: demoScenario.id, label: demoScenario.name, suiteId: demoSuite} : undefined;
   const id = `VR-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   const createdAt = new Date().toISOString();
   const db = env.DB;
@@ -69,7 +73,7 @@ export async function POST(request: Request) {
         let status = decision(checks);
         const safeEvidence = evidence.map(doc => ({ ...doc, fields: { ...doc.fields, ...(doc.fields.account ? { account: maskAccount(doc.fields.account) } : {}) } }));
         function buildReview(): Review {
-          return { id, createdAt, company: input.legalName || "Unnamed company", status, input: { ...input, account: maskAccount(input.account) }, evidence: safeEvidence, checks, stages, duration: Date.now() - started, policyVersion: POLICY_VERSION, ...explain(input, checks, status, id), ...(existing ? { relatedRunId: existing.runId } : {}) };
+          return { id, createdAt, company: input.legalName || "Unnamed company", status, input: { ...input, account: maskAccount(input.account) }, evidence: safeEvidence, checks, stages, duration: Date.now() - started, policyVersion: POLICY_VERSION, ...(sample ? {sample} : {}), ...explain(input, checks, status, id), ...(existing ? { relatedRunId: existing.runId } : {}) };
         }
         let review: Review = buildReview();
         await stage(5, "Saving the decision, evidence, and vendor response to the audit trail", async () => {
