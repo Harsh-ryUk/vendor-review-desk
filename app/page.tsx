@@ -7,6 +7,8 @@ import { POLICY_VERSION, STAGES, type Review, type Stage, type Submission, type 
 import { SCENARIOS, CATEGORIES, buildScenario, newSuiteId, scenarioFormData } from "../lib/scenarios";
 import { runReview } from "../lib/run-review";
 import { SERVICE_CATEGORIES, POLICY_REFERENCES } from "../lib/vendor-policy";
+import AutofillPanel from '../components/autofill-panel';
+import {FORM_FIELDS,mergeAutofill,type AutofillResult,type FormField,type ImportReport,type ImportRole} from '../lib/autofill';
 
 type View = "queue" | "history" | "demo" | "policy" | "new" | "run";
 type Filter = "all" | Status;
@@ -31,7 +33,12 @@ export default function App() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
-  const [input, setInput] = useState<Submission>(empty);
+  const [input, setInputState] = useState<Submission>(empty);
+  const inputRef=useRef<Submission>(empty);
+  const editedFields=useRef(new Set<FormField>());
+  const importRequests=useRef<Partial<Record<ImportRole,AbortController>>>({});
+  const [importing,setImporting]=useState<Partial<Record<ImportRole,string>>>({});
+  const [importReports,setImportReports]=useState<Partial<Record<ImportRole,ImportReport>>>({});
   const [taxFile, setTaxFile] = useState<File | null>(null);
   const [bankFile, setBankFile] = useState<File | null>(null);
   const [scenario, setScenario] = useState("");
@@ -75,15 +82,53 @@ export default function App() {
   useEffect(() => { void refresh(); }, []);
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [view, runId]);
   useEffect(() => { if (notice) { const timer = setTimeout(() => setNotice(""), 6500); return () => clearTimeout(timer); } }, [notice]);
+  useEffect(()=>()=>{Object.values(importRequests.current).forEach(request=>request?.abort());importRequests.current={};},[]);
+
+  function setInput(next:Submission) {inputRef.current=next;setInputState(next);}
+  function editField(field:FormField,value:string) {editedFields.current.add(field);setInput({...inputRef.current,[field]:value});}
+  function cancelImports() {Object.values(importRequests.current).forEach(request=>request?.abort());importRequests.current={};setImporting({});}
+  function useExtracted(role:ImportRole,field:FormField) {
+    const value=importReports[role]?.fields[field];if(!value) return;
+    editField(field,value);
+    setImportReports(previous=>({...previous,[role]:{...previous[role]!,kept:previous[role]!.kept.filter(key=>key!==field)}}));
+  }
+  async function autofill(file:File,role:ImportRole='profile') {
+    importRequests.current[role]?.abort();
+    const controller=new AbortController();importRequests.current[role]=controller;
+    setImporting(previous=>({...previous,[role]:file.name}));
+    setScenario('');setLoadedSeed('');
+    try {
+      if(file.size>2*1024*1024) throw new Error('Each document must be 2 MB or smaller.');
+      if(!/\.(pdf|txt|json)$/i.test(file.name)) throw new Error('Upload a PDF, TXT, or JSON file.');
+      const form=new FormData();form.set('file',file);form.set('role',role);
+      const response=await fetch('/api/autofill',{method:'POST',body:form,signal:controller.signal});
+      const data=await response.json() as AutofillResult & {error?:string};
+      if(importRequests.current[role]!==controller) return;
+      if(!response.ok) throw new Error(data.error||'The document could not be read.');
+      const result=mergeAutofill(inputRef.current,data.fields,editedFields.current);
+      setInput(result.next);
+      setImportReports(previous=>({...previous,[role]:{...data,filled:result.filled,kept:result.kept}}));
+    } catch(error) {
+      if(importRequests.current[role]===controller && !controller.signal.aborted) setImportReports(previous=>({...previous,[role]:{fileName:file.name,format:'',pages:0,fields:{},sources:{},warnings:[],filled:[],kept:[],error:error instanceof Error?error.message:'The document could not be read.'}}));
+    } finally {
+      if(importRequests.current[role]===controller) {delete importRequests.current[role];setImporting(previous=>{const next={...previous};delete next[role];return next;});}
+    }
+  }
+  function changeProof(role:'tax'|'bank',file:File|null) {
+    if(role==='tax')setTaxFile(file);else setBankFile(file);
+    if(file)void autofill(file,role);
+    else {importRequests.current[role]?.abort();delete importRequests.current[role];setImporting(previous=>{const next={...previous};delete next[role];return next;});setImportReports(previous=>{const next={...previous};delete next[role];return next;});}
+  }
 
   function navigate(next: View) {
     if (running) return;
+    if(next!=='new')cancelImports();
     setView(next); setError(""); setQuery(""); setFilter("all");
     window.scrollTo({ top: 0, behavior: "instant" });
     if (next !== "run") window.history.replaceState({}, "", window.location.pathname);
     if (next === "queue" || next === "history") void refresh();
   }
-  function newSubmission() { setInput({...empty}); setTaxFile(null); setBankFile(null); setScenario(""); navigate("new"); }
+  function newSubmission() { cancelImports();setImportReports({});editedFields.current.clear();setInput({...empty}); setTaxFile(null); setBankFile(null); setScenario(""); navigate("new"); }
   function openReview(review: Review) {
     setActive(review); setStages(review.stages); setRunId(review.id); setResultTab("checks"); navigate("run");
     window.history.replaceState({}, "", `?run=${review.id}`);
@@ -95,6 +140,7 @@ export default function App() {
       const seed = selected.baseline ? baselineSeeds[selected.baseline] || demoSeed || newSuiteId() : selected.expected === "approved" ? newSuiteId() : demoSeed || newSuiteId();
       if (selected.baseline && !reviews.some(r => r.sample?.suiteId === seed && r.sample.scenarioId === selected.baseline && r.status === "approved")) throw new Error(`Run ${SCENARIOS.find(s=>s.id===selected.baseline)?.name} first to create its approved baseline, or use Run all samples.`);
       const sample = buildScenario(id, seed);
+      cancelImports();setImportReports({});editedFields.current=new Set(FORM_FIELDS);
       const file = (doc: typeof sample.tax) => doc ? new File([doc.content], doc.name, {type:doc.type}) : null;
       if (id === "clean" || !demoSeed) setDemoSeed(seed); if(selected.expected === "approved") setBaselineSeeds(previous=>({...previous,[id]:seed})); setLoadedSeed(seed); setInput(sample.input); setTaxFile(file(sample.tax)); setBankFile(file(sample.bank)); setScenario(id); navigate("new");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load scenario."); }
@@ -117,6 +163,7 @@ export default function App() {
     finally {setSuiteRunning(false);setRunning(false);setSuiteStage("");}
   }
   async function submit(event: FormEvent) {
+    if(Object.keys(importRequests.current).length) {event.preventDefault();return;}
     event.preventDefault(); setError(""); setActive(null); setStages([]); setRunId(""); setRunning(true); setView("run"); setResultTab("checks");
     try {
       const form = new FormData(); Object.entries(input).forEach(([key, value]) => form.set(key, value));
@@ -179,10 +226,10 @@ export default function App() {
           <button className="back-button" onClick={() => navigate("queue")}><ArrowLeft size={16}/>Back to overview</button>
           <div className="page-heading compact"><div><p className="eyebrow">NEW REVIEW</p><h1>Submit a vendor</h1><p className="page-description">Add the company’s details and the documents that support them.</p></div></div>
           {scenario && <div className="info-strip"><FlaskConical size={19}/><p>Sample scenario loaded: <strong>{SCENARIOS.find(x => x.id === scenario)?.name}</strong>. You can edit the form before running it. Sample companies are fictional.</p></div>}
-          <form onSubmit={submit} className="submission-layout"><div className="form-sections"><section className="panel form-section"><SectionLabel number="01">Company details</SectionLabel><div className="form-grid"><Field label="Registered company name" wide><input required maxLength={200} value={input.legalName} onChange={e => setInput({...input,legalName:e.target.value})} placeholder="e.g. Northstar Studio Private Limited" autoComplete="organization"/></Field><Field label="Contact email"><input required type="email" maxLength={200} value={input.email} onChange={e => setInput({...input,email:e.target.value})} placeholder="finance@company.com" autoComplete="email"/></Field><Field label="Country"><select value={input.country} onChange={e => setInput({...input,country:e.target.value})}><option value="IN">India</option><option value="US">United States (manual review)</option></select></Field><Field label="Service category" wide hint="Choose the service provided. The demo purchasing policy excludes Gambling services."><select value={input.serviceCategory || "general"} onChange={e=>setInput({...input,serviceCategory:e.target.value})}>{SERVICE_CATEGORIES.map(category=><option key={category.id} value={category.id}>{category.label}</option>)}</select></Field><Field label="GSTIN" wide hint="15 characters. Checked for structure, checksum, and consistency with the certificate."><input required maxLength={15} value={input.taxId} onChange={e => setInput({...input,taxId:e.target.value.toUpperCase()})} placeholder="Enter the company’s GSTIN" spellCheck={false} autoComplete="off"/></Field></div></section>
-          <section className="panel form-section"><SectionLabel number="02">Banking details</SectionLabel><div className="form-grid"><Field label="Bank account number" hint="9–18 digits. Only the last four are retained in the review."><input required inputMode="numeric" maxLength={30} value={input.account} onChange={e => setInput({...input,account:e.target.value})} placeholder="Enter account number" autoComplete="off"/></Field><Field label="IFSC" hint="11 characters, as shown on the bank proof."><input required maxLength={11} value={input.bankCode} onChange={e => setInput({...input,bankCode:e.target.value.toUpperCase()})} placeholder="e.g. HDFC0001234" spellCheck={false} autoComplete="off"/></Field></div></section>
-          <section className="panel form-section"><SectionLabel number="03">Supporting documents</SectionLabel><p className="form-description">Text-based PDF, TXT, or JSON. Up to 2 MB and 10 pages per file. Missing or unreadable evidence goes to manual review.</p><div className="upload-grid"><DocumentUpload kind="Registration certificate" description="Company name + GSTIN" file={taxFile} onChange={setTaxFile} onError={setError}/><DocumentUpload kind="Bank account proof" description="Account holder + account number + IFSC" file={bankFile} onChange={setBankFile} onError={setError}/></div></section>
-          <div className="form-actions"><span><ShieldCheck size={15}/>Full account numbers are masked after comparison.</span><button className="button primary" type="submit"><ClipboardCheck size={17}/>Run vendor review<ArrowRight size={16}/></button></div></div>
+          <form onSubmit={submit} className="submission-layout"><div className="form-sections"><AutofillPanel reports={importReports} importing={importing} input={input} onImport={file=>void autofill(file)} onUse={useExtracted}/><section className="panel form-section"><SectionLabel number="01">Company details</SectionLabel><div className="form-grid"><Field label="Registered company name" wide><input required maxLength={200} value={input.legalName} onChange={e => editField("legalName",e.target.value)} placeholder="e.g. Northstar Studio Private Limited" autoComplete="organization"/></Field><Field label="Contact email"><input required type="email" maxLength={200} value={input.email} onChange={e => editField("email",e.target.value)} placeholder="finance@company.com" autoComplete="email"/></Field><Field label="Country"><select value={input.country} onChange={e => editField("country",e.target.value)}><option value="IN">India</option><option value="US">United States (manual review)</option>{!["IN","US"].includes(input.country) && <option value={input.country}>{input.country} (manual review)</option>}</select></Field><Field label="Service category" wide hint="Choose the service provided. The demo purchasing policy excludes Gambling services."><select value={input.serviceCategory || "general"} onChange={e=>editField("serviceCategory",e.target.value)}>{SERVICE_CATEGORIES.map(category=><option key={category.id} value={category.id}>{category.label}</option>)}{!SERVICE_CATEGORIES.some(category=>category.id===input.serviceCategory) && input.serviceCategory && <option value={input.serviceCategory}>{input.serviceCategory} (manual review)</option>}</select></Field><Field label="GSTIN" wide hint="15 characters. Checked for structure, checksum, and consistency with the certificate."><input required maxLength={15} value={input.taxId} onChange={e => editField("taxId",e.target.value.toUpperCase())} placeholder="Enter the company’s GSTIN" spellCheck={false} autoComplete="off"/></Field></div></section>
+          <section className="panel form-section"><SectionLabel number="02">Banking details</SectionLabel><div className="form-grid"><Field label="Bank account number" hint="9–18 digits. Only the last four are retained in the review."><input required inputMode="numeric" maxLength={30} value={input.account} onChange={e => editField("account",e.target.value)} placeholder="Enter account number" autoComplete="off"/></Field><Field label="IFSC" hint="11 characters, as shown on the bank proof."><input required maxLength={11} value={input.bankCode} onChange={e => editField("bankCode",e.target.value.toUpperCase())} placeholder="e.g. HDFC0001234" spellCheck={false} autoComplete="off"/></Field></div></section>
+          <section className="panel form-section"><SectionLabel number="03">Supporting documents</SectionLabel><p className="form-description">Text-based PDF, TXT, or JSON. Up to 2 MB and 10 pages per file. Missing or unreadable evidence goes to manual review.</p><div className="upload-grid"><DocumentUpload kind="Registration certificate" description="Company name + GSTIN" file={taxFile} onChange={file=>changeProof("tax",file)} onError={setError}/><DocumentUpload kind="Bank account proof" description="Account holder + account number + IFSC" file={bankFile} onChange={file=>changeProof("bank",file)} onError={setError}/></div></section>
+          <div className="form-actions"><span><ShieldCheck size={15}/>Full account numbers are masked after comparison.</span><button className="button primary" type="submit" disabled={Object.keys(importing).length>0}><ClipboardCheck size={17}/>{Object.keys(importing).length?"Reading documents…":"Run vendor review"}<ArrowRight size={16}/></button></div></div>
           <aside className="submission-aside"><div className="panel review-preview"><div className="mini-label">WHAT HAPPENS NEXT</div><h2>Review the facts.<br/>Keep the reasoning.</h2><ol>{STAGES.map((stage,i) => <li key={stage.id}><span>{i+1}</span>{stage.label}</li>)}</ol><hr/><p>You’ll see each stage as it executes, followed by a status, evidence, and a vendor response.</p></div><div className="plain-note"><CircleAlert size={17}/><p>Today’s policy supports India and labelled document fields. Scanned images and ambiguous layouts are routed to manual review.</p></div><button className="text-button" type="button" onClick={() => navigate("demo")}><FlaskConical size={15}/>Need sample documents?<ArrowRight size={14}/></button></aside></form>
         </>}
         {view === "run" && <>

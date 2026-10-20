@@ -1,0 +1,11 @@
+FICTIONAL VENDOR DETAILS - DEMO ONLY
+
+Company name: Seabrook Studio Demo Private Limited
+Contact email: finance@seabrook.example
+Country: India
+Service category: General goods and services
+GSTIN: 29AAAAS4821A1ZV
+Bank account number: 741250690481
+IFSC: HDFC0001234
+
+This file fills form fields. Attach matching registration and bank proofs before review.

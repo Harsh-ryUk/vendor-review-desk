@@ -25,6 +25,18 @@ Apply the migration only once to a fresh local database. Development and hosted 
 
 Visit `http://127.0.0.1:5173/`. Open **Demo workspace**, load **Everything matches**, and click **Run vendor review**. Loading a scenario only fills the form and attaches files; it does not create a result.
 
+## Autofill a new submission
+
+Open **New submission → Upload vendor details** and choose a labelled PDF, TXT, or flat JSON object. The form fills company name, contact email, country, category, GSTIN, bank account number, and IFSC when those fields are present. Download the example TXT from the form to see the supported layout.
+
+Attaching a registration certificate below also fills an empty company name and GSTIN; attaching bank proof fills an empty account number and IFSC. Bank account holder names never replace the registered company name. Missing contact details still need manual entry.
+
+Existing values and deliberate edits are preserved. If a new document disagrees, expand **Review alternatives** and explicitly choose any replacement. Conflicting labels, invalid contact email, and masked account numbers are left for manual entry. Unknown countries/categories remain visible and go through the normal manual-review policy.
+
+Autofill reads files in memory, creates no review, and does not update the vendor registry. A details import does not attach supporting evidence: upload the registration and bank proofs separately, inspect the form, then click **Run vendor review**. The server still validates the original proof files. PDF/TXT/JSON limits remain 2 MB, 10 PDF pages and 80,000 extracted characters; scanned PDFs require manual entry. No AI model, OCR, or external API is used.
+
+`POST /api/autofill` accepts multipart `file` and optional `role` (`profile`, `tax`, `bank`), returning extracted fields, source labels, warnings, file format and page count with `Cache-Control: no-store`. Run `TEST_ORIGIN=http://127.0.0.1:5175 npm run test:autofill` against an isolated local Worker.
+
 ## Demonstrate the decisions
 
 | Input | Expected result | Evidence |
@@ -106,6 +118,7 @@ The API integration script requires a running local preview and writes test data
 
 | File | Purpose |
 | --- | --- |
+| `lib/autofill.ts` and `app/api/autofill/route.ts` | Document import, role-specific field suggestions, and preservation of edits |
 | `lib/vendor-policy.ts` | Fictional restriction/revocation references and service-category rules |
 | `lib/scenarios.ts` | 34 fictional input builders and small valid PDF fixtures |
 | `lib/run-review.ts` | Shared streamed review client for individual and batch submissions |
